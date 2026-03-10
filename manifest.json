@@ -1,0 +1,24 @@
+{
+  "name": "CatChat",
+  "short_name": "CatChat",
+  "description": "Cute pink cat-themed private chat",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ff9ec1",
+  "theme_color": "#ff9ec1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192/ff9ec1/ffffff?text=Cat",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://via.placeholder.com/512/ff9ec1/ffffff?text=CatChat",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
