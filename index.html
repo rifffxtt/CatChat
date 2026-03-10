@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>CatChat 🐾💕</title>
+  <meta name="description" content="Cute pink kitty chat with friends!" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#ff9ec1" />
+  <!-- Placeholder – replace with real 192×192 & 512×512 PNG icons of a cute pink cat -->
+  <link rel="icon" href="https://via.placeholder.com/192/ff9ec1/ffffff?text=🐱" type="image/png" />
+
+  <!-- OneSignal v16 (deferred loading) -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+
+  <style>
+    :root {
+      --bg: #fff0f5; --text: #333; --primary: #ff9ec1; --secondary: #ffb3d9; --bubble-sent: #ff9ec1; --bubble-recv: #f5e1e9;
+    }
+    [data-theme="dark"] {
+      --bg: #2d1b24; --text: #f0e6ea; --primary: #ff80ab; --secondary: #ff4d82; --bubble-sent: #ff80ab; --bubble-recv: #4a2c3e;
+    }
+    body { margin:0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100dvh; display: flex; flex-direction: column; }
+    #login-form, #chat-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 1rem; }
+    #chat-screen { display: none; }
+    h1 { color: var(--primary); margin-bottom: 1.5rem; font-size: 2.5rem; }
+    input, button { padding: 0.9rem 1.2rem; margin: 0.6rem; border-radius: 999px; border: none; font-size: 1rem; width: 100%; max-width: 360px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    input { background: rgba(255,255,255,0.7); }
+    [data-theme="dark"] input { background: rgba(50,30,45,0.8); color: white; }
+    button { background: var(--primary); color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    button:hover { background: var(--secondary); }
+    #messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem; }
+    .message { max-width: 75%; padding: 0.8rem 1.2rem; border-radius: 1.2rem; position: relative; animation: fadeIn 0.3s; }
+    .sent { align-self: flex-end; background: var(--bubble-sent); color: white; border-bottom-right-radius: 0.3rem; }
+    .received { align-self: flex-start; background: var(--bubble-recv); border-bottom-left-radius: 0.3rem; }
+    .sender { font-size: 0.75rem; opacity: 0.8; display: block; margin-bottom: 0.2rem; }
+    .time { font-size: 0.65rem; opacity: 0.7; float: right; margin-left: 0.5rem; }
+    .seen { font-size: 0.65rem; opacity: 0.9; float: right; margin-left: 0.4rem; color: #e0f7fa; }
+    #input-area { display: flex; padding: 0.8rem; background: var(--bg); border-top: 1px solid rgba(0,0,0,0.08); }
+    #message-input { flex: 1; border-radius: 999px; padding: 0.9rem 1.3rem; margin: 0 0.5rem; }
+    #send-btn { padding: 0.9rem 1.4rem; border-radius: 999px; }
+    #theme-toggle, #logout { position: fixed; top: 1rem; background: var(--primary); color: white; padding: 0.6rem 1rem; border-radius: 999px; font-size: 0.9rem; cursor: pointer; }
+    #theme-toggle { right: 4.5rem; }
+    #logout { right: 1rem; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @media (max-width: 500px) { h1 { font-size: 2rem; } }
+  </style>
+</head>
+<body>
+
+  <div id="login-form">
+    <h1>CatChat 🐱💖</h1>
+    <form id="auth-form">
+      <input id="username" placeholder="Choose a cute username" required autocomplete="username" />
+      <input id="password" type="password" placeholder="Password (min 6 chars)" required autocomplete="new-password" />
+      <button type="submit">Join the meow party!</button>
+    </form>
+  </div>
+
+  <div id="chat-screen" style="display:none;">
+    <button id="theme-toggle">🌙 / ☀️</button>
+    <button id="logout">Meow out</button>
+    <h1 style="text-align:center; margin:1rem 0; font-size:1.8rem;">🐾 Chat Room</h1>
+    <div id="messages"></div>
+    <div id="input-area">
+      <input id="message-input" placeholder="Type a message... nya~" autocomplete="off" />
+      <button id="send-btn">Send 🐾</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, doc, setDoc, onSnapshot, query, orderBy, serverTimestamp, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getMessaging, onMessage } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBw-EKxDt4lE1wB34YP0ovc3yAKwnS3Zng",
+      authDomain: "catchat-6e94d.firebaseapp.com",
+      projectId: "catchat-6e94d",
+      storageBucket: "catchat-6e94d.firebasestorage.app",
+      messagingSenderId: "151675472868",
+      appId: "1:151675472868:web:3720620c3031e6bb0655f1",
+      measurementId: "G-3ZGTP8DLZM"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const messaging = getMessaging(app);
+
+    // OneSignal init (deferred pattern)
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async (OneSignal) => {
+      await OneSignal.init({
+        appId: "5b7285a0-1b8a-4776-9ac5-942f54ae8e19",
+        serviceWorkerParam: { scope: '/' },
+        serviceWorkerPath: 'OneSignalSDKWorker.js',
+        autoResubscribe: true,
+        notifyButton: { enable: false },
+        allowLocalhostAsSecureOrigin: true
+      });
+    });
+
+    // Dark mode
+    const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    document.getElementById('theme-toggle').onclick = () => {
+      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    };
+
+    // Fix mobile keyboard / address bar issues
+    function updateVH() {
+      let vh = window.visualViewport ? window.visualViewport.height * 0.01 : window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    window.visualViewport?.addEventListener('resize', updateVH);
+    window.addEventListener('resize', updateVH);
+    updateVH();
+
+    let currentUser = null;
+    let unsubscribe = null;
+
+    const loginForm = document.getElementById('login-form');
+    const chatScreen = document.getElementById('chat-screen');
+    const authForm = document.getElementById('auth-form');
+    const messageInput = document.getElementById('message-input');
+    const messagesDiv = document.getElementById('messages');
+    const sendBtn = document.getElementById('send-btn');
+
+    const getEmail = username => `${username.trim().toLowerCase()}@catchat.com`;
+    const getUsername = email => email.split('@')[0];
+
+    authForm.onsubmit = async e => {
+      e.preventDefault();
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      if (!username || password.length < 6) return alert("Username + password ≥6 chars nya~");
+
+      const email = getEmail(username);
+      try {
+        let cred = await signInWithEmailAndPassword(auth, email, password);
+      } catch (err) {
+        if (err.code === 'auth/user-not-found') {
+          await createUserWithEmailAndPassword(auth, email, password);
+          await setDoc(doc(db, 'users', auth.currentUser.uid), { username, createdAt: serverTimestamp() });
+        } else {
+          alert(err.message);
+          return;
+        }
+      }
+    };
+
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        currentUser = user;
+        loginForm.style.display = 'none';
+        chatScreen.style.display = 'flex';
+
+        const q = query(collection(db, 'messages'), orderBy('timestamp'));
+        unsubscribe = onSnapshot(q, snap => {
+          messagesDiv.innerHTML = '';
+          snap.forEach(d => {
+            const m = d.data();
+            const mine = m.uid === user.uid;
+            const div = document.createElement('div');
+            div.className = `message ${mine ? 'sent' : 'received'}`;
+            div.innerHTML = `
+              <span class="sender">${m.username}</span>
+              <p>${m.text}</p>
+              <span class="time">${m.timestamp ? new Date(m.timestamp.toDate()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}</span>
+              ${mine && m.seenBy?.length > 1 ? '<span class="seen">Seen ✓</span>' : ''}
+            `;
+            messagesDiv.appendChild(div);
+          });
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+
+        // Tag user in OneSignal for future targeting
+        OneSignalDeferred.push(OneSignal => {
+          OneSignal.login(user.uid);
+        });
+
+      } else {
+        currentUser = null;
+        loginForm.style.display = 'flex';
+        chatScreen.style.display = 'none';
+        if (unsubscribe) unsubscribe();
+      }
+    });
+
+    sendBtn.onclick = async () => {
+      const text = messageInput.value.trim();
+      if (!text || !currentUser) return;
+
+      const username = getUsername(currentUser.email);
+      const msgRef = await addDoc(collection(db, 'messages'), {
+        text,
+        uid: currentUser.uid,
+        username,
+        timestamp: serverTimestamp(),
+        seenBy: [currentUser.uid]
+      });
+
+      messageInput.value = '';
+
+      // Simple broadcast notification (client-side only – insecure for prod!)
+      try {
+        await fetch('https://corsproxy.io/?' + encodeURIComponent('https://onesignal.com/api/v1/notifications'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Basic os_v2_app_lnzilia3rjdxngwfsqxvjluode745avzyvpe7znsp3qlvmtedwtkgg7c3dv4k5x5tb66n3w6vw26vce6vb4hrp2dybwiup3qcakidvi'
+          },
+          body: JSON.stringify({
+            app_id: "5b7285a0-1b8a-4776-9ac5-942f54ae8e19",
+            included_segments: ["All"],
+            headings: { en: `${username} sent a message! 🐱` },
+            contents: { en: text.substring(0, 60) + (text.length > 60 ? '...' : '') },
+            data: { chat: true }
+          })
+        });
+      } catch {}
+    };
+
+    messageInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendBtn.click(); });
+  </script>
+</body>
+</html>
